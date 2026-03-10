@@ -1,0 +1,9 @@
+[submodule "repos/job-scraper"]
+	path = repos/job-scraper
+	url = https://github.com/dejspice/job-scraper.git
+[submodule "repos/dejdash"]
+	path = repos/dejdash
+	url = https://github.com/dejspice/dejdash.git
+[submodule "repos/resume-generator-project"]
+	path = repos/resume-generator-project
+	url = https://github.com/dejspice/resume-generator-project.git
