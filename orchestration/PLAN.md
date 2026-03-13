@@ -93,13 +93,9 @@ The `uploadAndProcess` legacy path also follows this chain (previously fell back
 
 ## What Still Needs to Happen (Deployment Steps)
 
-### 1. Merge feature branches to production
+### 1. ~~Merge feature branches to production~~ ✅ DONE
 
-```bash
-# job-scraper: feat/pipeline-alignment → main
-# dejdash: feat/pipeline-alignment → staging
-# resume-generator-project: feat/pipeline-alignment → main
-```
+All `feat/pipeline-alignment` branches have been fast-forward merged to their tracked branches and pushed.
 
 ### 2. Set environment variables on Railway
 
@@ -145,6 +141,26 @@ x-api-key: <api-key>
 **Source filtering:** Set `sourceFilters.sources` to match the scraper's `SOURCE_NAME`. The pydoll scraper defaults to `"hiring-cafe-pydoll-scraper"` and can be overridden via the `SOURCE_NAME` env var per cron job.
 
 ### 4. Test with a small manual scrape
+
+Use the helper scripts:
+
+```bash
+export DEJDASH_API_URL="https://your-backend.up.railway.app"
+export DEJDASH_API_KEY="your-api-key"
+
+# Check status and list configs
+./orchestration/scripts/setup_pipeline.sh
+
+# Create a PipelineConfig for auto-processing
+./orchestration/scripts/create_pipeline_config.sh <resume_config_id> pm-remote-auto hiring-cafe-pydoll-scraper
+
+# Run end-to-end test
+export SCRAPER_API_URL="https://job-scraper-production-2069.up.railway.app"
+export SCRAPER_API_KEY="your-scraper-key"
+./orchestration/scripts/test_pipeline.sh
+```
+
+Or manually:
 
 ```
 POST https://job-scraper-production-2069.up.railway.app/scrape
