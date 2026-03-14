@@ -1,7 +1,7 @@
 # Pipeline Alignment Plan
 
-Status: **All 5 gaps implemented** on `feat/pipeline-alignment` branches.
-Next: merge to tracked branches, create PipelineConfig docs in MongoDB, test live.
+Status: **All gaps implemented and merged.** `feat/pipeline-alignment` branches are up-to-date with their tracked branches.
+Next: deploy, create PipelineConfig docs in MongoDB, test live.
 
 ## Deployment Map
 
@@ -15,25 +15,28 @@ Next: merge to tracked branches, create PipelineConfig docs in MongoDB, test liv
 
 ### URL Configuration
 
-All scrapers currently hardcode `API_URL` to `fat-parcel-production.up.railway.app`. If the event bus and pipeline service are on `dejdash-production.up.railway.app` instead, the scraper `API_URL` needs updating.
+Scrapers now read `RAILWAY_API_URL` from the environment, falling back to the hardcoded default (`fat-parcel-production`). Set `RAILWAY_API_URL` on Railway to point to whichever backend runs the event bus and pipeline service.
 
 The pipeline service (`pipelineService.js`) resolves the resume API URL in this order:
 1. `ResumeConfig.api_settings.api_url` (per-config)
 2. `process.env.RESUME_API_URL` (env var)
 3. `https://resume-generator-api-5nq62.ondigitalocean.app` (hardcoded fallback)
 
-## What Was Implemented (feat/pipeline-alignment)
+The `uploadAndProcess` legacy path also follows this chain (previously fell back to `localhost`).
+
+## What Was Implemented
 
 ### Gap 1: `id` flows end-to-end
 - Added `id: Optional[str]` to `JobData` in resume API
 - Threaded through `process_single_job_direct` → `format_resume_data` → `save_resume_data`
 - Stored as `sourceJobId` in MongoDB resume documents
+- All ingestion paths (ingestJobs, uploadAndProcess, pipeline/run) extract and store `sourceId`
 
 ### Gap 2: `experience` derived from `min_experience_years`
-- Both `ingestJobs` and `uploadAndProcess` in `scraperIngestController.js` now fall back to `"${min_experience_years}+ years"`
+- All three ingestion paths (`ingestJobs`, `uploadAndProcess`, `pipelineController.run`) fall back to `"${min_experience_years}+ years"`
 
 ### Gap 3: Cron routed through event bus
-- Both scrapers (`hiring_cafe_scraper.py`, `hiring_cafe_scraper_pydoll.py`) now always use the 3-step process
+- Both scrapers (`hiring_cafe_scraper.py`, `hiring_cafe_scraper_pydoll.py`) always use the 3-step ingest
 - `finishRun` emits `SCRAPE_RUN_COMPLETED` → pipeline auto-process handles the rest
 
 ### Gap 4: `output_folder_id` captured in job status
@@ -46,20 +49,67 @@ The pipeline service (`pipelineService.js`) resolves the resume API URL in this 
 - When `output_folder_id` is provided, finds existing sheet and appends rows
 - Sequence numbering continues from last entry
 
-## What Still Needs to Happen
+### Gap 6: Env-based configuration for scrapers
+- Both scrapers read `RAILWAY_API_URL`, `RAILWAY_API_KEY`, `SOURCE_NAME` from env
+- Defaults preserved as fallback — no breaking change for existing deployments
+- Railway deployments can now target different backends without code changes
 
-### 1. Merge feature branches
+### Gap 7: uploadAndProcess aligned with pipeline contract
+- Now passes `source_run_id` and `source_config_id` to resume API
+- Includes `id` (sourceId) and `Experience` in formatted job payload
+- Uses consistent `RESUME_API_URL` resolution (env → config → fallback)
+- Uses `sourceId` in urlHash for dedup consistency
 
-```bash
-# job-scraper: feat/pipeline-alignment → main
-# dejdash: feat/pipeline-alignment → staging
-# resume-generator-project: feat/pipeline-alignment → main
-# orchestrator: feat/pipeline-alignment → main
+## Full Pipeline Flow
+
+```
+1. POST /scrape on job-scraper API
+   ↓
+2. Scraper runs → collects jobs from hiring.cafe
+   ↓
+3. 3-step ingest to dejdash backend:
+   POST /api/scraper-ingest/runs/start    → get runId
+   POST /api/scraper-ingest/runs/{id}/jobs → upload jobs
+   POST /api/scraper-ingest/runs/finish    → emit SCRAPE_RUN_COMPLETED
+   ↓
+4. Event bus triggers auto-process listener
+   ↓
+5. For each matching PipelineConfig:
+   a. Keyword extraction (process_jobs.py + OpenAI)
+   b. Dedup check against resume API
+   c. Submit to resume API: POST /jobs/json
+   d. Poll GET /jobs/{id} until completion
+   ↓
+6. Resume API processes each job:
+   a. Generate resume statements (OpenAI)
+   b. Generate skills, summary, similar titles
+   c. Write to MongoDB via dejdash_integration.py
+   d. Optional: Google Drive integration (create docs, tracking sheet)
+   ↓
+7. Pipeline service captures output_folder_id, links resume docs
+   ↓
+8. Frontend displays results at dejdash.vercel.app
 ```
 
-### 2. Verify/update API_URL in scrapers
+## What Still Needs to Happen (Deployment Steps)
 
-Confirm whether scrapers should point to `fat-parcel-production` or `dejdash-production`. The event bus and pipeline service must be on the same backend that receives the scraper's 3-step calls.
+### 1. ~~Merge feature branches to production~~ ✅ DONE
+
+All `feat/pipeline-alignment` branches have been fast-forward merged to their tracked branches and pushed.
+
+### 2. Set environment variables on Railway
+
+**Scraper API (`job-scraper-production`):**
+- `RAILWAY_API_URL` — URL of the dejdash backend that runs the event bus
+- `RAILWAY_API_KEY` — API key matching `DEJDASH_API_KEY` on the backend
+- `SOURCE_NAME` — (optional) override default source name per deployment
+
+**Dejdash Backend (`dejdash-production`):**
+- `MONGODB_URI` — shared MongoDB connection
+- `DEJDASH_API_KEY` — API key for scraper-ingest and pipeline endpoints
+- `RESUME_API_URL` — (optional) override resume API base URL
+- `RESUME_API_KEY` — (optional) API key for resume API
+- `OPENAI_API_KEY` — for keyword extraction
 
 ### 3. Create PipelineConfig documents in MongoDB
 
@@ -76,7 +126,9 @@ x-api-key: <api-key>
   "enabled": true,
   "autoProcessOnScrapeComplete": true,
   "mode": "async",
-  "sourceFilters": {},
+  "sourceFilters": {
+    "sources": ["hiring-cafe-pydoll-scraper"]
+  },
   "processingSettings": {
     "model_name": "gpt-4o-mini",
     "batch_size": 20
@@ -86,9 +138,29 @@ x-api-key: <api-key>
 
 **Template per person:** Each person who wants resumes from the same scrape gets their own ResumeConfig (with their template_id) and their own PipelineConfig.
 
-**Source filtering:** To prevent ALL configs from triggering on every scrape, set `sourceFilters.sources` to match the scraper's `SOURCE_NAME`. Currently all scrapers use `"hiring-cafe-pydoll-scraper"` — can be differentiated per cron job if needed.
+**Source filtering:** Set `sourceFilters.sources` to match the scraper's `SOURCE_NAME`. The pydoll scraper defaults to `"hiring-cafe-pydoll-scraper"` and can be overridden via the `SOURCE_NAME` env var per cron job.
 
 ### 4. Test with a small manual scrape
+
+Use the helper scripts:
+
+```bash
+export DEJDASH_API_URL="https://your-backend.up.railway.app"
+export DEJDASH_API_KEY="your-api-key"
+
+# Check status and list configs
+./orchestration/scripts/setup_pipeline.sh
+
+# Create a PipelineConfig for auto-processing
+./orchestration/scripts/create_pipeline_config.sh <resume_config_id> pm-remote-auto hiring-cafe-pydoll-scraper
+
+# Run end-to-end test
+export SCRAPER_API_URL="https://job-scraper-production-2069.up.railway.app"
+export SCRAPER_API_KEY="your-scraper-key"
+./orchestration/scripts/test_pipeline.sh
+```
+
+Or manually:
 
 ```
 POST https://job-scraper-production-2069.up.railway.app/scrape
@@ -100,6 +172,13 @@ x-api-key: <scraper-api-key>
   "max_jobs": 3
 }
 ```
+
+Verify the chain:
+1. Jobs appear in dejdash scraper dashboard
+2. `SCRAPE_RUN_COMPLETED` event fires (check `/api/pipeline/status`)
+3. PipelineConfig auto-triggers (check `/api/pipeline/jobs/active`)
+4. Keywords extracted, resumes generated, written to MongoDB
+5. Resumes visible in dejdash frontend
 
 ### 5. Set up Railway cron jobs
 
@@ -119,6 +198,6 @@ Configure scheduled triggers in Railway that call `POST /scrape` on the scraper 
 | Repo | Files Changed |
 |---|---|
 | **job-scraper** | `hiring_cafe_scraper.py`, `hiring_cafe_scraper_pydoll.py` |
-| **dejdash** | `backend/controllers/scraperIngestController.js` |
+| **dejdash** | `backend/controllers/scraperIngestController.js`, `backend/controllers/pipelineController.js`, `backend/services/pipelineService.js`, `backend/services/eventBus.js` |
 | **resume-generator-project** | `api/resume_api.py`, `dejdash_integration.py`, `api/google_drive_integration.py` |
 | **orchestrator** | `contracts/pipeline-schema.md`, `orchestration/PLAN.md` |
