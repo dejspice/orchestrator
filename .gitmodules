@@ -5,8 +5,12 @@
 [submodule "repos/dejdash"]
 	path = repos/dejdash
 	url = https://github.com/dejspice/dejdash.git
-	branch = staging
+	branch = cursor/autopilot-running-observability-5f1a
 [submodule "repos/resume-generator-project"]
 	path = repos/resume-generator-project
 	url = https://github.com/dejspice/resume-generator-project.git
 	branch = main
+[submodule "repos/agentic-job"]
+	path = repos/agentic-job
+	url = https://github.com/dejspice/agentic-job.git
+	branch = cursor/restore-temporal-runtime-8f3b
