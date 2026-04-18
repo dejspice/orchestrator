@@ -8,8 +8,9 @@ Launch Cursor cloud agents against this repo to work across all three projects.
 | Submodule | Path | Branch | Purpose |
 |---|---|---|---|
 | [job-scraper](https://github.com/dejspice/job-scraper) | `repos/job-scraper` | `main` | Pydoll-based scraper that pulls job listings from hiring.cafe |
-| [dejdash](https://github.com/dejspice/dejdash) | `repos/dejdash` | `staging` | Node/React dashboard — receives scraped jobs, displays results |
-| [resume-generator-project](https://github.com/dejspice/resume-generator-project) | `repos/resume-generator` | `main` | Serverless resume generator (AWS Lambda + S3 + DynamoDB) |
+| [dejdash](https://github.com/dejspice/dejdash) | `repos/dejdash` | `cursor/autopilot-running-observability-5f1a` | Node/React dashboard (CandidateOS) — receives scraped jobs, displays results |
+| [resume-generator-project](https://github.com/dejspice/resume-generator-project) | `repos/resume-generator-project` | `main` | Serverless resume generator (AWS Lambda + S3 + DynamoDB) |
+| [agentic-job](https://github.com/dejspice/agentic-job) | `repos/agentic-job` | `cursor/restore-temporal-runtime-8f3b` | Autopilot automation engine — Temporal workflows + Worker + browser automation |
 
 ## Data Flow
 
@@ -58,13 +59,17 @@ git submodule update --remote --merge
 ```
 orchestrator/
 ├── repos/
-│   ├── job-scraper/          # scraping service
-│   ├── dejdash/              # dashboard UI + backend
-│   └── resume-generator-project/  # resume generation
+│   ├── job-scraper/              # scraping service
+│   ├── dejdash/                  # dashboard UI + backend (CandidateOS)
+│   ├── resume-generator-project/ # resume generation
+│   └── agentic-job/              # Autopilot — Temporal + browser automation
+├── docs/
+│   └── integration/              # cross-repo integration docs
+│       └── candidateos-autopilot-overview.md
 ├── orchestration/
-│   ├── prompts/              # reusable agent prompts
-│   └── scripts/              # cross-repo automation scripts
-├── contracts/                # shared schemas / API contracts
-├── AGENTS.md                 # cloud agent instructions
-└── README.md                 # this file
+│   ├── prompts/                  # reusable agent prompts
+│   └── scripts/                  # cross-repo automation scripts
+├── contracts/                    # shared schemas / API contracts
+├── AGENTS.md                     # cloud agent instructions
+└── README.md                     # this file
 ```

@@ -6,16 +6,18 @@ All three repos live under `repos/` and are connected by a shared data pipeline.
 ## Repo Overview
 
 - **repos/job-scraper** (Python) — scrapes job listings from hiring.cafe using Pydoll browser automation. Uploads results to the dejdash Railway API.
-- **repos/dejdash** (Node.js backend + React frontend) — the central dashboard. Backend on Railway receives scraped jobs; frontend on Vercel displays them.
+- **repos/dejdash** (Node.js backend + React frontend) — the central dashboard (CandidateOS). Backend on Railway receives scraped jobs; frontend on Vercel displays them.
 - **repos/resume-generator-project** (Python, AWS serverless) — takes job listings, generates tailored resumes via Lambda, stores results back in dejdash's MongoDB.
+- **repos/agentic-job** (Node.js, Temporal) — Autopilot automation engine. Runs Temporal workflows and browser automation that dejdash/CandidateOS delegates application submissions to.
 
 ## Tracked Branches
 
 | Repo | Branch | Notes |
 |---|---|---|
 | job-scraper | `main` | Production |
-| dejdash | `staging` | Active development branch |
+| dejdash | `cursor/autopilot-running-observability-5f1a` | Active CandidateOS/Autopilot feature branch |
 | resume-generator-project | `main` | Production |
+| agentic-job | `cursor/restore-temporal-runtime-8f3b` | Active Autopilot/Temporal feature branch |
 
 When working on dejdash, always target the `staging` branch.
 
